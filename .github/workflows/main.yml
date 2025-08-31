@@ -1,0 +1,188 @@
+name: Flask CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+env:
+  IMAGE_NAME: flask-github-actions
+  CONTAINER_NAME: web
+  DOCKER_NETWORK: flask-app-network
+  MONGO_VOLUME: flask_mongo_data
+
+jobs:
+  test:
+    name: Test Flask Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up docker compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+
+      - name: Build Test Docker image
+        run: |
+          docker-compose up --build --abort-on-container-exit --exit-code-from test
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Image Tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build and push Docker image to Docker Hub
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }} .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+
+  deploy-to-staging:
+    name: Deploy to Staging EC2
+    if: github.ref == 'refs/heads/main'
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH Into Staging EC2 Instance and Deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{secrets.EC2_HOST_IP}}
+          username: ${{secrets.EC2_USER_NAME}}
+          key: ${{secrets.EC2_SSH_KEY}}
+          port: 22
+          script: |
+            IMAGE_NAME=${{ env.IMAGE_NAME }}
+            DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME
+            DOCKER_TAG=${{ needs.build-and-push.outputs.tag }}
+            DOCKER_NETWORK=${{ env.DOCKER_NETWORK }}
+            CONTAINER_NAME=${{ env.CONTAINER_NAME }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            MONGO_VOLUME=${{ env.MONGO_VOLUME }}
+
+            echo "Checking Docker network..."
+            docker network inspect ${DOCKER_NETWORK} > /dev/null 2>&1 || docker network create ${DOCKER_NETWORK}
+
+            echo "Checking Mongo volume..."
+            docker volume inspect ${MONGO_VOLUME} > /dev/null 2>&1 || docker volume create ${MONGO_VOLUME}
+            
+            echo "Checking MongoDB container..."
+            if ! docker ps -a --format '{{.Names}}' | grep -q '^mongo-db$'; then
+              docker run -d --name mongo-db --network ${DOCKER_NETWORK} \
+                -p 27017:27017 \
+                -v ${MONGO_VOLUME}:/data/db \
+                -e MONGO_INITDB_DATABASE=flask_db_git \
+                mongo:latest
+            else
+              if ! docker ps --format '{{.Names}}' | grep -q '^mongo-db$'; then
+                docker start mongo-db
+              fi
+              docker network connect ${DOCKER_NETWORK} mongo-db || true
+            fi
+
+            echo "Pulling new Flask image..."
+            docker pull $DOCKER_IMAGE:$DOCKER_TAG
+
+            echo "Stopping old container..."
+            docker stop ${CONTAINER_NAME} || true
+            docker rm ${CONTAINER_NAME} || true
+
+            echo "Starting new Flask container..."
+            docker run -d --name ${CONTAINER_NAME} --network ${DOCKER_NETWORK} \
+              -p 8000:8000 \
+              -e MONGO_URI=mongodb://mongo-db:27017/flask_db_git \
+              -e JWT_SECRET_KEY=${JWT_SECRET_KEY} \
+              -e MONGO_DB_NAME=flask_db_git \
+              $DOCKER_IMAGE:$DOCKER_TAG
+
+            echo "Pruning Docker system..."
+            docker system prune -af
+
+            echo "Deployment complete."
+
+  deploy-to-prod:
+    name: Deploy to Production EC2  
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH Into Production EC2 Instance and Deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{secrets.PROD_EC2_HOST_IP}}
+          username: ${{secrets.EC2_USER_NAME}}
+          key: ${{secrets.EC2_SSH_KEY}}
+          port: 22
+          script: |
+            IMAGE_NAME=${{ env.IMAGE_NAME }}
+            DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME
+            DOCKER_TAG=${{ needs.build-and-push.outputs.tag }}
+            DOCKER_NETWORK=${{ env.DOCKER_NETWORK }}
+            CONTAINER_NAME=${{ env.CONTAINER_NAME }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            MONGO_VOLUME=${{ env.MONGO_VOLUME }}
+
+            echo "Checking Docker network..."
+            docker network inspect ${DOCKER_NETWORK} > /dev/null 2>&1 || docker network create ${DOCKER_NETWORK}
+
+            echo "Checking Mongo volume..."
+            docker volume inspect ${MONGO_VOLUME} > /dev/null 2>&1 || docker volume create ${MONGO_VOLUME}
+            
+            echo "Checking MongoDB container..."
+            if ! docker ps -a --format '{{.Names}}' | grep -q '^mongo-db$'; then
+              docker run -d --name mongo-db --network ${DOCKER_NETWORK} \
+                -p 27017:27017 \
+                -v ${MONGO_VOLUME}:/data/db \
+                -e MONGO_INITDB_DATABASE=flask_db_git \
+                mongo:latest
+            else
+              if ! docker ps --format '{{.Names}}' | grep -q '^mongo-db$'; then
+                docker start mongo-db
+              fi
+              docker network connect ${DOCKER_NETWORK} mongo-db || true
+            fi
+
+            echo "Pulling new Flask image..."
+            docker pull $DOCKER_IMAGE:$DOCKER_TAG
+
+            echo "Stopping old container..."
+            docker stop ${CONTAINER_NAME} || true
+            docker rm ${CONTAINER_NAME} || true
+
+            echo "Starting new Flask container..."
+            docker run -d --name ${CONTAINER_NAME} --network ${DOCKER_NETWORK} \
+              -p 8000:8000 \
+              -e MONGO_URI=mongodb://mongo-db:27017/flask_db_git \
+              -e JWT_SECRET_KEY=${JWT_SECRET_KEY} \
+              -e MONGO_DB_NAME=flask_db_git \
+              $DOCKER_IMAGE:$DOCKER_TAG
+
+            echo "Pruning Docker system..."
+            docker system prune -af
+
+            echo "Deployment complete."
