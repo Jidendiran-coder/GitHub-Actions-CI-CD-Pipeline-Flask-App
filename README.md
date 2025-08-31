@@ -35,10 +35,10 @@ The GitHub Actions workflow (`main.yml`) implements the following stages:
 - Ensures code quality before proceeding to build
 
 #### Test Stage Screenshot
-![Test Stage Success](/output/1_test_success.png)
+<img width="1463" height="598" alt="1_test_success" src="https://github.com/user-attachments/assets/50dd4a63-23f0-46ce-8729-cb18150ae67e" />
 
 #### Test Stage Console output
-![Deployment Stage Success](/output/2_test_success_result.png)
+<img width="1453" height="702" alt="2_test_success_result" src="https://github.com/user-attachments/assets/63574aae-66ae-4b58-8a32-3b83e1573e9e" />
 
 ### 2. Build and Push Stage
 - Builds Docker image
@@ -46,7 +46,7 @@ The GitHub Actions workflow (`main.yml`) implements the following stages:
 - Tags image with git commit hash or tag
 
 #### Build and Push Stage
-![Build and Push Stage](/output/3_build_and_push.png)
+<img width="1470" height="617" alt="3_build_and_push" src="https://github.com/user-attachments/assets/d6ad850f-a724-4cc7-b2cd-912139895295" />
 
 ### 3. Deployment Stages
 #### Staging Deployment
@@ -57,19 +57,19 @@ The GitHub Actions workflow (`main.yml`) implements the following stages:
 
 #### Output - Staging Deployment Success
 
-![Staging Deployment Stage](/output/4_staging_deployment_success.png)
+<img width="1455" height="599" alt="4_staging_deployment_success" src="https://github.com/user-attachments/assets/bfd004b9-ffad-4177-b0dd-3ecd28aad579" />
 
 #### Output - Staging Deployment Console Success
 
-![Staging Deployment Stage](/output/5_staging_deployment_sucess_details.png)
+<img width="1444" height="650" alt="5_staging_deployment_sucess_details" src="https://github.com/user-attachments/assets/e5ce92aa-c9ac-4ef6-a2f0-556bab335084" />
 
 #### Output - EC2 Containers Running with Images
 
-![Docker Staging Containers and Images](/output/6_docker_staging_containers_images.png)
+<img width="1459" height="228" alt="6_docker_staging_containers_images" src="https://github.com/user-attachments/assets/1a473bd0-117f-4fa2-8f1c-e6222a1c827b" />
 
 #### Output - Docker Staging Containers and Images
 
-![Staging Deployment Overall Success](/output/7_staging_success_overall.png)
+<img width="1283" height="319" alt="7_staging_success_overall" src="https://github.com/user-attachments/assets/2c65dce2-ccb1-4a97-96a0-ccc185b5936b" />
 
 
 #### Production Deployment
@@ -79,12 +79,11 @@ The GitHub Actions workflow (`main.yml`) implements the following stages:
 
 #### Output - Production Deployment Success - without Staging Not Deployed
 
-![Production Deployment Stage](/output/8_deploy_to_prod.png)
+<img width="1274" height="315" alt="8_deploy_to_prod" src="https://github.com/user-attachments/assets/32e170bf-b91e-437a-9c28-2c5b4500717b" />
 
 #### Output - Docker Staging Containers and Images
 
-![Production Deployment Docker Containers and Images](/output/9_deploy_to_prod.png)
-
+<img width="1455" height="737" alt="9_deploy_to_prod" src="https://github.com/user-attachments/assets/7d682577-8249-487f-bfc5-0422326ecb32" />
 
 ## Environment Variables
 - `MONGO_URI`: MongoDB connection string
