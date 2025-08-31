@@ -23,7 +23,7 @@ This is a Flask web application configured with Docker and automated CI/CD using
 ├── .github/workflows/main.yml    # GitHub Actions workflow configuration
 ├── Dockerfile                    # Docker image build configuration
 ├── docker-compose.yml            # Docker Compose configuration
-└── app/                          # Flask application source code
+└── app.py                        # Flask application source code
 ```
 
 ## CI/CD Workflow
